@@ -90,12 +90,16 @@ MODULE command_line
     TYPE(cmd_arg), DIMENSION(:), ALLOCATABLE :: all_args_tmp
     CHARACTER(LEN=max_string_len) :: arg, tmp, tmp_name, tmp_val
     INTEGER :: arg_in_length, tmp_len
+    LOGICAL :: truncated
+
+    truncated = .FALSE.
 
     num_args = COMMAND_ARGUMENT_COUNT()
     IF(num_args > 0) THEN
 
       ! If this is not the first call, all_args may be already allocated
-      ! Deallocate if needed, and allocate to correct size
+      ! Deallocate if needed, and allocate to sufficient size
+      ! Will be trimmed to actual size after parsing
       IF(ALLOCATED(all_args)) DEALLOCATE(all_args)
       ALLOCATE(all_args(num_args))
 
@@ -104,12 +108,12 @@ MODULE command_line
       ! Loop over all arguments and extract
       DO WHILE (i_tok <= num_args)
         ! First extract name and value parts in all cases
+        ! This consumes 1, 2 or 3 tokens depending on spaces
 
-        CALL GET_COMMAND_ARGUMENT(i_tok, arg, arg_in_length)
+        CALL GET_COMMAND_ARGUMENT(i_tok, arg, length=arg_in_length)
         i_tok = i_tok + 1
 
-        IF(arg_in_length > max_string_len) PRINT*, "Very long argument truncated. If this is deliberate  &
-        & consider increasing the max_string_len parameter"
+        IF(arg_in_length > max_string_len) truncated = .TRUE.
 
         ! Location of the '=' sign
         ! If not found, return value of this is 0
@@ -127,8 +131,10 @@ MODULE command_line
         ELSE IF(indx > 1) THEN
           ! Have an '=' but no following value
           ! Consume next token
-          CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+          CALL GET_COMMAND_ARGUMENT(i_tok, tmp, length=arg_in_length)
           i_tok = i_tok + 1
+          IF(arg_in_length > max_string_len) truncated = .TRUE.
+
           tmp_val = ADJUSTL(tmp)
           tmp_name = ADJUSTL(arg(1:indx-1))
         ELSE   ! Have not yet found the equals!
@@ -136,7 +142,9 @@ MODULE command_line
           tmp_name = ADJUSTL(arg)
 
           !Peek next token - will need either 0, 1 or 2 more
-          CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+          CALL GET_COMMAND_ARGUMENT(i_tok, tmp, length=arg_in_length)
+          IF(arg_in_length > max_string_len) truncated = .TRUE.
+
           indx = INDEX(ADJUSTL(tmp), '=')
           IF(indx /= 1) THEN
             ! Next token does not lead with '=', assume this is a flag and
@@ -146,12 +154,14 @@ MODULE command_line
             ! Consume this one and possibly one more
             i_tok = i_tok + 1
             IF(LEN(TRIM(ADJUSTL(tmp))) > 1) THEN
-              !This token has content
+              !This token has content following the '='
               tmp_val = ADJUSTL(tmp(2:))
             ELSE
               ! Consume another
-              CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+              CALL GET_COMMAND_ARGUMENT(i_tok, tmp, length=arg_in_length)
               i_tok = i_tok + 1
+              IF(arg_in_length > max_string_len) truncated = .TRUE.
+
               tmp_val = ADJUSTL(tmp)
             END IF
           END IF
@@ -173,6 +183,9 @@ MODULE command_line
       all_args = all_args_tmp(1:num_args)
       DEALLOCATE(all_args_tmp)
     ENDIF
+
+    IF(truncated) PRINT'(A,I0, A)', "WARNING: Very long argument truncated. To support arguments&
+   & longer than ", max_string_len, " increase the max_string_len parameter"
 
 
   END SUBROUTINE parse_args
