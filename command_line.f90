@@ -67,13 +67,12 @@ MODULE command_line
 
   CONTAINS
 
- ! /TODO regroup on = sign in case of spaces
- ! if = not present, then thing is a flag...
   !> @brief Parse out command line args
-  ! This function can be called multiple times
-  ! and will freshly parse ALL arguments each time
-  ! We assume these are entered as 'name=value'. If there is
-  ! no '=' sign, we set an empty value
+  !>
+  !> This function can be called multiple times
+  !> and will freshly parse ALL arguments each time
+  !> We assume these are entered as 'name=value'. If there is
+  !> no '=' sign, we set an empty value
   SUBROUTINE parse_args()
 
     ! Strictly we can't be sure 50 chars is enough
