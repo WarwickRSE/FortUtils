@@ -1,8 +1,7 @@
   !> @brief Functions to parse command line arguments
   !>
   !> Module to read command line arguments to a program
-  !> We assume they are of the form name=value, without spaces
-  !> This is because space-based tokenising is handled by the shell before we see anything.
+  !> We assume they are of the form name=value (spaces around '=' are ignored) or are a flag
   !> Value can be extracted as a string, integer, a long-integer
   !> or a single or double-precision real, according to the
   !> type passed in.
@@ -15,7 +14,7 @@
   !> get_arg and get_arg_value for 'key=value' arguments, arg_present
   !> for flag arguments, and arg_count to get total count
   !> NOTE: total count may not match COMMAND_ARGUMENT_COUNT due to
-  !> parsing key=value syntax!
+  !> parsing spaces out of key( )=()value syntax!
   !> A complete example code is:
   ! @snippet command_line_snippet.f90 Cmd eg
   !> @include command_line_snippet.f90
@@ -31,7 +30,7 @@ MODULE command_line
   PRIVATE
   PUBLIC :: get_arg, get_arg_value, arg_present, arg_count
   !> Length of character value string
-  INTEGER, PARAMETER :: len = 30
+  INTEGER, PARAMETER :: vlen = 30
 
   LOGICAL :: initial_parse_done = .FALSE.
 
@@ -39,7 +38,7 @@ MODULE command_line
   ! Init. to default values
   TYPE cmd_arg
     CHARACTER(LEN=20) :: name = "NULL"
-    CHARACTER(LEN=len) :: value = ""
+    CHARACTER(LEN=vlen) :: value = ""
   END TYPE
 
   !> @brief Read arguments by name or number
@@ -80,8 +79,9 @@ MODULE command_line
     ! Strictly we can't be sure 50 chars is enough
     ! but for command-line args it's enough if we're sensible
     ! We wont overflow, but our strings may get truncated
-    CHARACTER(LEN=51) :: arg
-    INTEGER :: i, indx
+    INTEGER :: i_arg, i_tok, indx
+    TYPE(cmd_arg), DIMENSION(:), ALLOCATABLE :: all_args_tmp
+    CHARACTER(LEN=51) :: arg, tmp
 
     num_args = COMMAND_ARGUMENT_COUNT()
     IF(num_args > 0) THEN
@@ -91,24 +91,68 @@ MODULE command_line
       IF(ALLOCATED(all_args)) DEALLOCATE(all_args)
       ALLOCATE(all_args(num_args))
 
+      i_arg = 1 !Index of current arg
+      i_tok = 1 ! Index of current input token
       ! Loop over all arguments
-      DO i = 1, num_args
-        CALL GET_COMMAND_ARGUMENT(i, arg)
+      DO WHILE (i_tok <= num_args)
+        CALL GET_COMMAND_ARGUMENT(i_tok, arg)
+        i_tok = i_tok + 1
+
         ! Location of the '=' sign
-        ! If not found, return value is 0
+        ! If not found, return value of this is 0
         indx = INDEX(arg, '=')
-        IF(indx > 1) THEN
+
+        !Look at next chars - remove all whitespace
+        tmp = TRIM(ADJUSTL(arg(indx+1:)))
+        IF(indx > 1 .AND. LEN(TRIM(ADJUSTL(arg(indx+1:)))) > 0) THEN
           ! All characters up to '=', not including it
           ! but with any leading spaces removed
-          all_args(i)%name = ADJUSTL(arg(1:indx-1))
+          all_args(i_arg)%name = ADJUSTL(arg(1:indx-1))
           ! All characters after '='
-          all_args(i)%value= ADJUSTL(arg(indx+1:))
-       ELSE
-          all_args(i)%name = TRIM(ADJUSTL(arg))
-          ! Value already has a default value, so leave it alone
+          all_args(i_arg)%value = tmp
+        ELSE IF(indx > 1) THEN
+          ! Have an '=' but no following value
+          ! Consume next token
+          CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+          i_tok = i_tok + 1
+          all_args(i_arg)%name = ADJUSTL(arg(1:indx-1))
+          all_args(i_arg)%value = tmp
+        ELSE   ! Have not yet found the equals!
+          ! Set name, then hunt value...
+          all_args(i_arg)%name = TRIM(ADJUSTL(arg))
+
+          !Peek next token - will need either 0, 1 or 2 more
+          CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+          indx = INDEX(ADJUSTL(tmp), '=')
+          IF(indx /= 1) THEN
+            ! Next token does not lead with '=', assume this is a flag and
+            ! DO NOT consume next. Set value for clarity
+            all_args(i_arg)%value = ""
+          ELSE
+            ! Consume this one and possibly one more
+            i_tok = i_tok + 1
+            IF(LEN(TRIM(ADJUSTL(tmp))) > 1) THEN
+              !This token has content
+              all_args(i_arg)%value = ADJUSTL(tmp(2:))
+            ELSE
+              ! Consume another
+              CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
+              i_tok = i_tok + 1
+              all_args(i_arg)%value = ADJUSTL(tmp)
+            END IF
+          END IF
         END IF
+        i_arg = i_arg + 1
       END DO
     ENDIF
+
+    !i_arg is now the actual parsed count
+    !Shrink array to get rid of excess unfilled space
+    num_args = i_arg-1
+    CALL MOVE_ALLOC(all_args, all_args_tmp)
+    ALLOCATE(all_args(num_args))
+    all_args = all_args_tmp(1:num_args)
+    DEALLOCATE(all_args_tmp)
 
   END SUBROUTINE parse_args
 
@@ -492,7 +536,7 @@ MODULE command_line
   !> @return The string value associated with the given name
   FUNCTION get_arg_value(name, exists)
 
-    CHARACTER(LEN=len) :: get_arg_value
+    CHARACTER(LEN=vlen) :: get_arg_value
     CHARACTER(LEN=*), INTENT(IN) :: name
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     TYPE(cmd_arg) :: tmp
