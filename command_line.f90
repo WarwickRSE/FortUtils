@@ -143,15 +143,15 @@ MODULE command_line
         END IF
         i_arg = i_arg + 1
       END DO
+      !i_arg is now the actual parsed count
+      !Shrink array to get rid of excess unfilled space
+      num_args = i_arg-1
+      CALL MOVE_ALLOC(all_args, all_args_tmp)
+      ALLOCATE(all_args(num_args))
+      all_args = all_args_tmp(1:num_args)
+      DEALLOCATE(all_args_tmp)
     ENDIF
 
-    !i_arg is now the actual parsed count
-    !Shrink array to get rid of excess unfilled space
-    num_args = i_arg-1
-    CALL MOVE_ALLOC(all_args, all_args_tmp)
-    ALLOCATE(all_args(num_args))
-    all_args = all_args_tmp(1:num_args)
-    DEALLOCATE(all_args_tmp)
 
   END SUBROUTINE parse_args
 
