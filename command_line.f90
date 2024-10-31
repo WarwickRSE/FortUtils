@@ -8,7 +8,8 @@
   !> Argument names are limited to 20 chars, and values
   !> to 30 chars as read.
   !>
-  !> Fortran 2008 is required for ISO_FORTRAN_ENV
+  !> Fortran 2008 is required for ISO_FORTRAN_ENV. Implicit allocation
+  !> of allocatables is not assumed
   !>
   !> Note that the only functions you should call from outside are
   !> get_arg and get_arg_value for 'key=value' arguments, arg_present
@@ -21,6 +22,9 @@
 
   !> @author H Ratcliffe
 
+!TODO consider differentiating empty-string input, from true flag with
+! no input?
+
 MODULE command_line
 
   USE ISO_FORTRAN_ENV
@@ -29,16 +33,14 @@ MODULE command_line
 
   PRIVATE
   PUBLIC :: get_arg, get_arg_value, arg_present, arg_count
-  !> Length of character value string
-  INTEGER, PARAMETER :: vlen = 30
 
   LOGICAL :: initial_parse_done = .FALSE.
 
   !> Type containing a key-value pair
   ! Init. to default values
   TYPE cmd_arg
-    CHARACTER(LEN=20) :: name = "NULL"
-    CHARACTER(LEN=vlen) :: value = ""
+    CHARACTER(LEN=:), ALLOCATABLE :: name
+    CHARACTER(LEN=:), ALLOCATABLE :: value
   END TYPE
 
   !> @brief Read arguments by name or number
@@ -63,6 +65,7 @@ MODULE command_line
   TYPE(cmd_arg), DIMENSION(:), ALLOCATABLE :: all_args
   !> The number of arguments
   INTEGER :: num_args = 0
+  INTEGER, PARAMETER :: max_string_len = 200
   PRIVATE :: all_args, num_args
 
   CONTAINS
@@ -75,12 +78,18 @@ MODULE command_line
   !> no '=' sign, we set an empty value
   SUBROUTINE parse_args()
 
-    ! Strictly we can't be sure 50 chars is enough
+    ! Strictly we can't be sure any max_string_len is enough
     ! but for command-line args it's enough if we're sensible
     ! We wont overflow, but our strings may get truncated
+    ! We'll print an warning, since this is probably unintended input
+
+    ! NOTE: some codes have reason to disable implicit re-allocation so we
+    ! take the extra effort to allocate all our strings manually
+
     INTEGER :: i_arg, i_tok, indx
     TYPE(cmd_arg), DIMENSION(:), ALLOCATABLE :: all_args_tmp
-    CHARACTER(LEN=51) :: arg, tmp
+    CHARACTER(LEN=max_string_len) :: arg, tmp, tmp_name, tmp_val
+    INTEGER :: arg_in_length, tmp_len
 
     num_args = COMMAND_ARGUMENT_COUNT()
     IF(num_args > 0) THEN
@@ -92,10 +101,15 @@ MODULE command_line
 
       i_arg = 1 !Index of current arg
       i_tok = 1 ! Index of current input token
-      ! Loop over all arguments
+      ! Loop over all arguments and extract
       DO WHILE (i_tok <= num_args)
-        CALL GET_COMMAND_ARGUMENT(i_tok, arg)
+        ! First extract name and value parts in all cases
+
+        CALL GET_COMMAND_ARGUMENT(i_tok, arg, arg_in_length)
         i_tok = i_tok + 1
+
+        IF(arg_in_length > max_string_len) PRINT*, "Very long argument truncated. If this is deliberate  &
+        & consider increasing the max_string_len parameter"
 
         ! Location of the '=' sign
         ! If not found, return value of this is 0
@@ -103,22 +117,23 @@ MODULE command_line
 
         !Look at next chars - remove all whitespace
         tmp = TRIM(ADJUSTL(arg(indx+1:)))
-        IF(indx > 1 .AND. LEN(TRIM(ADJUSTL(arg(indx+1:)))) > 0) THEN
+        tmp_len = LEN(TRIM(tmp))
+        IF(indx > 1 .AND. tmp_len > 0) THEN
+          ! All characters after '='
+          tmp_val = tmp
           ! All characters up to '=', not including it
           ! but with any leading spaces removed
-          all_args(i_arg)%name = ADJUSTL(arg(1:indx-1))
-          ! All characters after '='
-          all_args(i_arg)%value = tmp
+          tmp_name = ADJUSTL(arg(1:indx-1))
         ELSE IF(indx > 1) THEN
           ! Have an '=' but no following value
           ! Consume next token
           CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
           i_tok = i_tok + 1
-          all_args(i_arg)%name = ADJUSTL(arg(1:indx-1))
-          all_args(i_arg)%value = tmp
+          tmp_val = ADJUSTL(tmp)
+          tmp_name = ADJUSTL(arg(1:indx-1))
         ELSE   ! Have not yet found the equals!
           ! Set name, then hunt value...
-          all_args(i_arg)%name = TRIM(ADJUSTL(arg))
+          tmp_name = ADJUSTL(arg)
 
           !Peek next token - will need either 0, 1 or 2 more
           CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
@@ -126,21 +141,28 @@ MODULE command_line
           IF(indx /= 1) THEN
             ! Next token does not lead with '=', assume this is a flag and
             ! DO NOT consume next. Set value for clarity
-            all_args(i_arg)%value = ""
+            tmp_val = ""
           ELSE
             ! Consume this one and possibly one more
             i_tok = i_tok + 1
             IF(LEN(TRIM(ADJUSTL(tmp))) > 1) THEN
               !This token has content
-              all_args(i_arg)%value = ADJUSTL(tmp(2:))
+              tmp_val = ADJUSTL(tmp(2:))
             ELSE
               ! Consume another
               CALL GET_COMMAND_ARGUMENT(i_tok, tmp)
               i_tok = i_tok + 1
-              all_args(i_arg)%value = ADJUSTL(tmp)
+              tmp_val = ADJUSTL(tmp)
             END IF
           END IF
         END IF
+
+        ! Explicitly allocate and set the values
+        ALLOCATE(CHARACTER(len=LEN(TRIM(tmp_name))) :: all_args(i_arg)%name)
+        all_args(i_arg)%name = TRIM(tmp_name)
+        ALLOCATE(CHARACTER(len=LEN(TRIM(tmp_val))) :: all_args(i_arg)%value)
+        all_args(i_arg)%value = TRIM(tmp_val)
+
         i_arg = i_arg + 1
       END DO
       !i_arg is now the actual parsed count
@@ -535,7 +557,8 @@ MODULE command_line
   !> @return The string value associated with the given name
   FUNCTION get_arg_value(name, exists)
 
-    CHARACTER(LEN=vlen) :: get_arg_value
+  !TODO -make result allocatable and check what caveats this might have
+    CHARACTER(LEN=max_string_len) :: get_arg_value
     CHARACTER(LEN=*), INTENT(IN) :: name
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     TYPE(cmd_arg) :: tmp
