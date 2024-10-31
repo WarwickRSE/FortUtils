@@ -1,15 +1,21 @@
   !> @brief Functions to parse command line arguments
   !>
   !> Module to read command line arguments to a program
-  !> We assume they are of the form name=value. There must
-  !> NOT be spaces around the '=' sign!
-  !> Value can be extracted as a string, a long-integer
-  !> or a double-precision real.
+  !> We assume they are of the form name=value, without spaces
+  !> This is because space-based tokenising is handled by the shell before we see anything.
+  !> Value can be extracted as a string, integer, a long-integer
+  !> or a single or double-precision real, according to the
+  !> type passed in.
   !> Argument names are limited to 20 chars, and values
   !> to 30 chars as read.
   !>
+  !> Fortran 2008 is required for ISO_FORTRAN_ENV
+  !>
   !> Note that the only functions you should call from outside are
-  !> parse_args, get_arg and get_arg_value
+  !> get_arg and get_arg_value for 'key=value' arguments, arg_present
+  !> for flag arguments, and arg_count to get total count
+  !> NOTE: total count may not match COMMAND_ARGUMENT_COUNT due to
+  !> parsing key=value syntax!
   !> A complete example code is:
   ! @snippet command_line_snippet.f90 Cmd eg
   !> @include command_line_snippet.f90
@@ -22,8 +28,12 @@ MODULE command_line
 
   IMPLICIT NONE
 
+  PRIVATE
+  PUBLIC :: get_arg, get_arg_value, arg_present, arg_count
   !> Length of character value string
   INTEGER, PARAMETER :: len = 30
+
+  LOGICAL :: initial_parse_done = .FALSE.
 
   !> Type containing a key-value pair
   ! Init. to default values
@@ -32,38 +42,24 @@ MODULE command_line
     CHARACTER(LEN=len) :: value = ""
   END TYPE
 
-  ! Interface dispatches to the correct actual function
-  ! based on arguments in call
-  ! This means we can convert to a requested type
-  ! We call like e.g.: get_arg(10, var) or
-  ! get_arg("name", var) and we will try and
-  ! interpret the value as whatever type var is
-  ! We can supply optional arg to those
-  ! to capture whether or not the name exists
-  ! Note that if a name was present, but the value could
-  ! not be parsed, exists will be TRUE
-  ! but correct will be FALSE
   !> @brief Read arguments by name or number
   !>
-  !> All of the members of this interface take either a 'name' or a 'num'
-  !>  parameter, detailling which argument to look up and
-  !> the type of the 'val' argument dictates the type
-  !> to attempt parsing the argument as
-  !
-  !> @param name Name to look up (if used)
-  !> @param num Arg. number to look up (if used)
-  !> @param val Value to read into
+  !> Get arguments. If the first parameter is a string,
+  !> this is interpreted as the name of the parameter, if
+  !> an integer, it is the position of the argument in the input list.
+  !> @param name Name to look up (supply this OR num)
+  !> @param num Arg. number to look up (supply this OR name)
+  !> @param val Value to read into, with type matching that to parse as
   !> @param exists Whether the name was found
   !> @return True if the name is found and parsed, False otherwise
   INTERFACE get_arg
     MODULE PROCEDURE get_arg_num_int, get_arg_name_int
+    MODULE PROCEDURE get_arg_num_long, get_arg_name_long
+    MODULE PROCEDURE get_arg_num_float, get_arg_name_float
     MODULE PROCEDURE get_arg_num_dbl, get_arg_name_dbl
     MODULE PROCEDURE get_arg_num_str, get_arg_name_str
   END INTERFACE
 
-  ! Module level variables - these are accessible
-  ! to all functions in the module
-  ! but we make them private to within the module only
   !> The argument list
   TYPE(cmd_arg), DIMENSION(:), ALLOCATABLE :: all_args
   !> The number of arguments
@@ -72,16 +68,14 @@ MODULE command_line
 
   CONTAINS
 
+ ! /TODO regroup on = sign in case of spaces
+ ! if = not present, then thing is a flag...
   !> @brief Parse out command line args
   ! This function can be called multiple times
   ! and will freshly parse ALL arguments each time
-  ! We assume these are entered as 'name=value' and
-  ! if there is no '=' sign, then value is set to a sentinel
-  ! For most flexibility, we assume all values are reals, and
-  ! thus we use 'HUGE(1.0)' as the no-value sentinel. This number
-  ! is greater than any other real value
+  ! We assume these are entered as 'name=value'. If there is
+  ! no '=' sign, we set an empty value
   SUBROUTINE parse_args()
-    !Grab all command line args and store
 
     ! Strictly we can't be sure 50 chars is enough
     ! but for command-line args it's enough if we're sensible
@@ -118,12 +112,27 @@ MODULE command_line
 
   END SUBROUTINE parse_args
 
+  !> Helper function - do a parse if it hasn't been done yet
+  SUBROUTINE initial_parse
+
+    IF(.NOT. initial_parse_done) THEN
+      CALL parse_args
+      initial_parse_done = .TRUE.
+    END IF
+
+  END SUBROUTINE initial_parse
+
+  !> Get the number of arguments
+  !> NOTE: total count may not match COMMAND_ARGUMENT_COUNT due to
+  !> parsing key=value syntax!
+  FUNCTION arg_count()
+    INTEGER :: arg_count
+
+    CALL initial_parse
+    arg_count = num_args
+  END FUNCTION
+
 !------------------------------------------------------------------
-  ! The next functions let you access the parsed args
-  ! You need to have called parse_args first or
-  ! there wont be any args!
-  ! You don't need to call these explicitly, you should
-  ! just use get_arg
 
   !> @brief Read by number for double precision values
   !> @param num Argument number to read
@@ -139,11 +148,12 @@ MODULE command_line
     LOGICAL :: found
     INTEGER :: ierr
 
+    CALL initial_parse
+
     found = .FALSE.
     ! Check requested number is in range
     IF(num <= num_args .AND. num > 0) THEN
       ! READ it from string into value
-      ! We don't need to specify the format in general
       READ(all_args(num)%value, *, IOSTAT=ierr) val
       found = .TRUE.
     END IF
@@ -172,6 +182,8 @@ MODULE command_line
     LOGICAL :: found
     INTEGER :: ierr
 
+    CALL initial_parse
+
     found = .FALSE.
     ! Our cmd_arg type is already initialised to the sentinel
     DO i = 1, num_args
@@ -191,7 +203,59 @@ MODULE command_line
 
   END FUNCTION get_arg_name_dbl
 
-  !> @brief Read by number for long integer values
+  ! Command line parsing should be avoided in performance critical code
+  ! so extra overhead from double call and downcast is not a problem
+
+! \TODO Use this approach, or just dupe. all the code?
+
+  !> @brief Read by number for single precision (float) values
+  !> @param num Argument number to read
+  !> @param val Value to read into
+  !> @param exists Whether the name was found
+  !> @return True if the name is found and parsed, False otherwise
+  FUNCTION get_arg_num_float(num, val, exists)
+    LOGICAL :: get_arg_num_float
+    INTEGER, INTENT(IN) :: num
+    REAL(KIND=REAL32), INTENT(OUT) :: val
+    REAL(KIND=REAL64) :: tmp
+    LOGICAL, INTENT(OUT), OPTIONAL :: exists
+
+    get_arg_num_float = get_arg_num_dbl(num, tmp, exists)
+    IF( ABS(tmp) < HUGE(val)) THEN
+      !Value in range. Convert. Note: there may be precision loss
+      val = REAL(tmp, KIND=REAL32)
+    ELSE
+      !Value out of range, can't be parsed
+      get_arg_num_float  = .FALSE.
+    END IF
+
+  END FUNCTION
+
+  !> @brief Read by name for single precision (float) values
+  !> @param name Argument name to look up
+  !> @param val Value to read into
+  !> @param exists Whether the name was found
+  !> @return True if the name is found and parsed, False otherwise
+  FUNCTION get_arg_name_float(name, val, exists)
+    LOGICAL :: get_arg_name_float
+    CHARACTER(LEN=*), INTENT(IN) :: name
+    REAL(KIND=REAL32), INTENT(OUT) :: val
+    REAL(KIND=REAL64) :: tmp
+    LOGICAL, INTENT(OUT), OPTIONAL :: exists
+
+    get_arg_name_float = get_arg_name_dbl(name, tmp, exists)
+    IF( ABS(tmp) < HUGE(val)) THEN
+      !Value in range. Convert. Note: there may be precision loss
+      val = REAL(tmp, KIND=REAL32)
+    ELSE
+      !Value out of range, can't be parsed
+      get_arg_name_float  = .FALSE.
+    END IF
+
+  END FUNCTION
+
+
+  !> @brief Read by number for integer values
   !> @param num Argument number to read
   !> @param val Value to read into
   !> @param exists Whether the name was found
@@ -204,6 +268,8 @@ MODULE command_line
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
+
+    CALL initial_parse
 
     found = .FALSE.
     ! Check requested number is in range
@@ -223,7 +289,7 @@ MODULE command_line
 
   END FUNCTION get_arg_num_int
 
-  !> @brief Read by name for long integer values
+  !> @brief Read by name for integer values
   !> @param name Argument name to look up
   !> @param val Value to read into
   !> @param exists Whether the name was found
@@ -237,6 +303,8 @@ MODULE command_line
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
+
+    CALL initial_parse
 
     found = .FALSE.
     ! Our cmd_arg type is already initialised to the sentinel
@@ -257,6 +325,76 @@ MODULE command_line
 
   END FUNCTION get_arg_name_int
 
+  !> @brief Read by number for long integer values
+  !> @param num Argument number to read
+  !> @param val Value to read into
+  !> @param exists Whether the name was found
+  !> @return True if the name is found and parsed, False otherwise
+  FUNCTION get_arg_num_long(num, val, exists)
+
+    LOGICAL :: get_arg_num_long
+    INTEGER, INTENT(IN) :: num
+    INTEGER(KIND=INT64), INTENT(OUT) :: val
+    LOGICAL, INTENT(OUT), OPTIONAL :: exists
+    LOGICAL :: found
+    INTEGER :: ierr
+
+    CALL initial_parse
+
+    found = .FALSE.
+    ! Check requested number is in range
+    IF(num <= num_args .AND. num > 0) THEN
+      ! READ it from string into value
+      ! We don't need to specify the format in general
+      READ(all_args(num)%value, *, IOSTAT=ierr) val
+      found = .TRUE.
+    END IF
+
+    IF(PRESENT(exists)) THEN
+      exists = found
+    END IF
+
+    ! Return value is whether value is found and correctly parsed
+    get_arg_num_long = (found .AND. (ierr == 0))
+
+  END FUNCTION get_arg_num_long
+
+  !> @brief Read by name for long integer values
+  !> @param name Argument name to look up
+  !> @param val Value to read into
+  !> @param exists Whether the name was found
+  !> @return True if the name is found and parsed, False otherwise
+  FUNCTION get_arg_name_long(name, val, exists)
+
+    LOGICAL :: get_arg_name_long
+    CHARACTER(LEN=*), INTENT(IN) :: name
+    INTEGER(KIND=INT64), INTENT(OUT) :: val
+    INTEGER :: i
+    LOGICAL, INTENT(OUT), OPTIONAL :: exists
+    LOGICAL :: found
+    INTEGER :: ierr
+
+   CALL initial_parse
+
+    found = .FALSE.
+    ! Our cmd_arg type is already initialised to the sentinel
+    DO i = 1, num_args
+      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
+        found = .TRUE.
+        READ(all_args(i)%value, *, IOSTAT=ierr) val
+        EXIT
+      END IF
+    END DO
+
+    IF(PRESENT(exists)) THEN
+      exists = found
+    END IF
+
+    ! Return value is whether value is found and correctly parsed
+    get_arg_name_long = (found .AND. (ierr == 0))
+
+  END FUNCTION get_arg_name_long
+
   !> @brief Read by number for string/character values
   !> @param num Argument number to read
   !> @param val Value to read into
@@ -270,6 +408,8 @@ MODULE command_line
     CHARACTER(LEN=*), INTENT(OUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
+
+    CALL initial_parse
 
     found = .FALSE.
     ! Check requested number is in range
@@ -304,6 +444,8 @@ MODULE command_line
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
 
+    CALL initial_parse
+
     found = .FALSE.
     ! Our cmd_arg type is already initialised to the sentinel
     DO i = 1, num_args
@@ -326,8 +468,24 @@ MODULE command_line
 
 !--------------------------------------------------------------------
 
-  ! These lets you get just the string value from an argument by name
-  ! you still need to have called parse_args first!
+  FUNCTION arg_present(name) RESULT(found)
+
+   LOGICAL :: found
+   CHARACTER(LEN=*), INTENT(IN) :: name
+   INTEGER :: i
+
+    CALL initial_parse
+
+    found = .FALSE.
+    DO i = 1, num_args
+      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
+        found = .TRUE.
+        EXIT
+      ENDIF
+    END DO
+
+  END FUNCTION arg_present
+
   !> @brief Lookup an argument by name and return the value as a string
   !> @param name Argument name to look up
   !> @param exists Whether the name was found
@@ -340,6 +498,8 @@ MODULE command_line
     TYPE(cmd_arg) :: tmp
     INTEGER :: i
     LOGICAL :: found
+
+    CALL initial_parse
 
     ! Initialise to the default value
     ! Use a temporary to get the default values
