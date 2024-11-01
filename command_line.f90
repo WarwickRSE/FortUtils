@@ -546,7 +546,9 @@ MODULE command_line
 
 
 !--------------------------------------------------------------------
-
+  !> @brief Check presence of an argument by name
+  !> @param name Argument name to look up
+  !> @return True if present, False if not
   FUNCTION arg_present(name) RESULT(found)
 
    LOGICAL :: found
@@ -575,7 +577,6 @@ MODULE command_line
     CHARACTER(LEN=:), ALLOCATABLE :: get_arg_value
     CHARACTER(LEN=*), INTENT(IN) :: name
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    TYPE(cmd_arg) :: tmp
     INTEGER :: i
     LOGICAL :: found
 
