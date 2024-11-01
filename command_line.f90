@@ -595,6 +595,8 @@ MODULE command_line
   END FUNCTION get_arg_num_str
 
   !> @brief Read by name for string values
+  !> NOTE: if the string passed is shorter than the value, it will be truncated
+  !> If the length is not known use get_arg_value to get an allocatable string
   !> @param name Argument name to look up
   !> @param val Value to read into
   !> @param exists Whether the name was found - this is already contained in
@@ -612,7 +614,6 @@ MODULE command_line
     CALL initial_parse
 
     found = .FALSE.
-    ! Our cmd_arg type is already initialised to the sentinel
     DO i = 1, num_args
       IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
         found = .TRUE.
