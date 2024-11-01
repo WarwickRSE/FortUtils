@@ -565,14 +565,14 @@ MODULE command_line
 
   END FUNCTION arg_present
 
-  !> @brief Lookup an argument by name and return the value as a string
+  !> @brief Lookup an argument by name and return the value as an (allocatable) string
+  !> If the name is NOT PRESENT, an empty string is returned
   !> @param name Argument name to look up
   !> @param exists Whether the name was found
   !> @return The string value associated with the given name
   FUNCTION get_arg_value(name, exists)
 
-  !TODO -make result allocatable and check what caveats this might have
-    CHARACTER(LEN=max_string_len) :: get_arg_value
+    CHARACTER(LEN=:), ALLOCATABLE :: get_arg_value
     CHARACTER(LEN=*), INTENT(IN) :: name
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     TYPE(cmd_arg) :: tmp
@@ -581,20 +581,18 @@ MODULE command_line
 
     CALL initial_parse
 
-    ! Initialise to the default value
-    ! Use a temporary to get the default values
-    ! This makes sure we match the expected sentinel
-    get_arg_value = tmp%value
     found = .FALSE.
 
     DO i = 1, num_args
       IF(all_args(i)%name .EQ. TRIM(ADJUSTL(name))) THEN
-        get_arg_value = all_args(i)%value
+        ALLOCATE(get_arg_value, SOURCE=all_args(i)%value)
         found = .TRUE.
         EXIT
       END IF
     END DO
 
+    ! Return empty string, not unallocated one.
+    IF(.NOT. ALLOCATED(get_arg_value)) ALLOCATE(CHARACTER(LEN=0) :: get_arg_value)
     IF(PRESENT(exists)) THEN
       exists = found
     END IF
