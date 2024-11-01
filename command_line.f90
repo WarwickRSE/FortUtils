@@ -33,7 +33,8 @@ MODULE command_line
   IMPLICIT NONE
 
   PRIVATE
-  PUBLIC :: get_arg, get_arg_value, arg_present, arg_count
+  PUBLIC :: get_arg, get_arg_value, arg_present ! Main accessors
+  PUBLIC :: arg_count, dump_names, str_wrapper  ! Helpers
 
   LOGICAL :: initial_parse_done = .FALSE.
 
@@ -42,6 +43,10 @@ MODULE command_line
   TYPE cmd_arg
     CHARACTER(LEN=:), ALLOCATABLE :: name
     CHARACTER(LEN=:), ALLOCATABLE :: value
+  END TYPE
+
+  TYPE str_wrapper
+    CHARACTER(LEN=:), ALLOCATABLE :: str
   END TYPE
 
   !> @brief Read arguments by name or number
@@ -566,6 +571,21 @@ MODULE command_line
     END DO
 
   END FUNCTION arg_present
+
+  !> @brief Get all the argument names (by copy)
+  !> Order will _probably_ match input order, but this is not guaranteed
+  !> @return Array of str_wrapper types containing all argument names
+  FUNCTION dump_names()
+    TYPE(str_wrapper), DIMENSION(:), ALLOCATABLE :: dump_names
+    INTEGER :: i
+
+    ! Do this the long way again to support non implicit allocations
+    ALLOCATE(dump_names(num_args))
+    DO i = 1, num_args
+      ALLOCATE(dump_names(i)%str, SOURCE =all_args(i)%name)
+    END DO
+
+  END FUNCTION dump_names
 
   !> @brief Lookup an argument by name and return the value as an (allocatable) string
   !> If the name is NOT PRESENT, an empty string is returned
