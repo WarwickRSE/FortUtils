@@ -20,7 +20,8 @@
   ! @snippet command_line_snippet.f90 Cmd eg
   !> @include command_line_snippet.f90
 
-  !> @author H Ratcliffe
+  !> @author H Ratcliffe, Senior Research Software Engineer, University of Warwick
+  !> @date 1/11/24
 
 !TODO consider differentiating empty-string input, from true flag with
 ! no input?
