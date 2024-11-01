@@ -50,6 +50,7 @@ PROGRAM MAIN
   CHARACTER(LEN=25) :: str_val
   CHARACTER(LEN=:), ALLOCATABLE :: str_cont
   INTEGER(KIND=INT32) :: int_val
+  LOGICAL :: bool_val
   INTEGER :: total, i
 
   TYPE(str_wrapper), DIMENSION(:), ALLOCATABLE :: all_names
@@ -115,6 +116,20 @@ PROGRAM MAIN
     PRINT*, "Got arg val3 as ", int_val, " as an int"
   ELSE
     PRINT*, "Failed to get arg val3 as an int"
+    IF(exists) THEN
+      PRINT*, "  Value could not be parsed"
+    ELSE
+      PRINT*, "  Value was not found in input"
+    END IF
+  END IF
+
+  ! Try to get arg named val4 as an Logical
+  success = get_arg("val4", bool_val, exists=exists)
+
+  IF(success) THEN
+    PRINT*, "Got arg val4 as ", bool_val, " as an logical"
+  ELSE
+    PRINT*, "Failed to get arg val4 as an logical"
     IF(exists) THEN
       PRINT*, "  Value could not be parsed"
     ELSE
