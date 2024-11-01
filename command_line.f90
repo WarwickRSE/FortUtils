@@ -46,6 +46,7 @@ MODULE command_line
     LOGICAL :: has_value = .TRUE. !Whether a value was supplied (c.f. empty)
   END TYPE
 
+  !> Wrapper to allow array of allocatable strings
   TYPE str_wrapper
     CHARACTER(LEN=:), ALLOCATABLE :: str
   END TYPE
