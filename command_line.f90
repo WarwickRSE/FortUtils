@@ -2,6 +2,7 @@
   !>
   !> Module to read command line arguments to a program
   !> We assume they are of the form name=value (spaces around '=' are ignored) or are a flag
+  !> NOTE: 'val=""' differs from 'val' - the latter is a flag, the former an empty string
   !> Value can be extracted as a string, integer, a long-integer
   !> or a single or double-precision real, according to the
   !> type passed in.
@@ -12,8 +13,10 @@
   !> of allocatables is not assumed
   !>
   !> Note that the only functions you should call from outside are
-  !> get_arg and get_arg_value for 'key=value' arguments, arg_present
-  !> for flag arguments, and arg_count to get total count
+  !> get_arg and get_arg_value for 'key=value' arguments
+  !> arg_present to check presence and state (flag or valued)
+  !> arg_count and dump_names for general inquiries
+  !> NOTE: flags can also be read by name as a logical: TRUE if present, FALSE if not
   !> NOTE: total count may not match COMMAND_ARGUMENT_COUNT due to
   !> parsing spaces out of key( )=()value syntax!
   !> A complete example code is:
@@ -22,9 +25,6 @@
 
   !> @author H Ratcliffe, Senior Research Software Engineer, University of Warwick
   !> @date 1/11/24
-
-!TODO consider differentiating empty-string input, from true flag with
-! no input?
 
 MODULE command_line
 
@@ -43,6 +43,7 @@ MODULE command_line
   TYPE cmd_arg
     CHARACTER(LEN=:), ALLOCATABLE :: name
     CHARACTER(LEN=:), ALLOCATABLE :: value
+    LOGICAL :: has_value = .TRUE. !Whether a value was supplied (c.f. empty)
   END TYPE
 
   TYPE str_wrapper
@@ -155,8 +156,9 @@ MODULE command_line
           indx = INDEX(ADJUSTL(tmp), '=')
           IF(indx /= 1) THEN
             ! Next token does not lead with '=', assume this is a flag and
-            ! DO NOT consume next. Set value for clarity
+            ! DO NOT consume next. Set value for clarity, and mark
             tmp_val = ""
+            all_args(i_arg)%has_value = .FALSE.
           ELSE
             ! Consume this one and possibly one more
             i_tok = i_tok + 1
@@ -253,6 +255,8 @@ MODULE command_line
   END FUNCTION get_arg_num_logical
 
   !> @brief Read by name for logical values
+  !> NOTE : a flag (name with no '=value' part) will parse as
+  !> .TRUE. if present, and .FALSE. if not
   !> @param name Argument name to look up
   !> @param val Value to read into
   !> @param exists Whether the name was found
@@ -270,11 +274,17 @@ MODULE command_line
     CALL initial_parse
 
     found = .FALSE.
+    val = .FALSE.
+    ierr = 0
     ! Our cmd_arg type is already initialised to the sentinel
     DO i = 1, num_args
       IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
         found = .TRUE.
-        READ(all_args(i)%value, *, IOSTAT=ierr) val
+        IF(all_args(i)%has_value) THEN
+          READ(all_args(i)%value, *, IOSTAT=ierr) val
+        ELSE
+          val = .TRUE.
+        END IF
         EXIT
       END IF
     END DO
@@ -624,19 +634,23 @@ MODULE command_line
 !--------------------------------------------------------------------
   !> @brief Check presence of an argument by name
   !> @param name Argument name to look up
+  !> @param has_value Whether this argument has a defined value (also .FALSE. if not present)
   !> @return True if present, False if not
-  FUNCTION arg_present(name) RESULT(found)
+  FUNCTION arg_present(name, has_value) RESULT(found)
 
    LOGICAL :: found
    CHARACTER(LEN=*), INTENT(IN) :: name
+   LOGICAL, INTENT(OUT), OPTIONAL :: has_value
    INTEGER :: i
 
     CALL initial_parse
 
     found = .FALSE.
+    IF(PRESENT(has_value)) has_value = .FALSE.
     DO i = 1, num_args
       IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
         found = .TRUE.
+        IF(PRESENT(has_value)) has_value = all_args(i)%has_value
         EXIT
       ENDIF
     END DO

@@ -50,21 +50,30 @@ PROGRAM MAIN
   CHARACTER(LEN=25) :: str_val
   CHARACTER(LEN=:), ALLOCATABLE :: str_cont
   INTEGER(KIND=INT32) :: int_val
-  LOGICAL :: bool_val
+  LOGICAL :: bool_val, has_val
   INTEGER :: total, i
 
   TYPE(str_wrapper), DIMENSION(:), ALLOCATABLE :: all_names
 
   ! Checking for presence and count
-  PRINT*, "Checking count and presence of specific name --------------------------------"
-  success = arg_present("val1")
+  PRINT*, "Checking count and presence of specific names --------------------------------"
   total = arg_count()
   PRINT*, "There are ", total, "arguments"
+  success = arg_present("val1")
   IF(success) THEN
     PRINT*, "Arg val1 is present"
   ELSE
     PRINT*, "Arg val1 is not present"
   END IF
+  success = arg_present("val2", has_val)
+  IF(success .AND. has_val) THEN
+    PRINT*, "Arg val2 is present and has a defined value"
+  ELSE IF(success) THEN
+    PRINT*, "Arg val2 is present but has no defined value"
+  ELSE
+    PRINT*, "Arg val2 is not present"
+  END IF
+
 
   PRINT*, "A list of all the arguments supplied ---------------------------------------"
   all_names = dump_names()
