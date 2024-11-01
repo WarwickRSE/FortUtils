@@ -121,8 +121,8 @@ MODULE command_line
         indx = INDEX(arg, '=')
 
         !Look at next chars - remove all whitespace
-        tmp = TRIM(ADJUSTL(arg(indx+1:)))
-        tmp_len = LEN(TRIM(tmp))
+        tmp = ADJUSTL(arg(indx+1:))
+        tmp_len = LEN_TRIM(tmp)
         IF(indx > 1 .AND. tmp_len > 0) THEN
           ! All characters after '='
           tmp_val = tmp
@@ -154,7 +154,7 @@ MODULE command_line
           ELSE
             ! Consume this one and possibly one more
             i_tok = i_tok + 1
-            IF(LEN(TRIM(ADJUSTL(tmp))) > 1) THEN
+            IF(LEN_TRIM(ADJUSTL(tmp)) > 1) THEN
               !This token has content following the '='
               tmp_val = ADJUSTL(tmp(2:))
             ELSE
@@ -169,9 +169,9 @@ MODULE command_line
         END IF
 
         ! Explicitly allocate and set the values
-        ALLOCATE(CHARACTER(len=LEN(TRIM(tmp_name))) :: all_args(i_arg)%name)
+        ALLOCATE(CHARACTER(len=LEN_TRIM(tmp_name)) :: all_args(i_arg)%name)
         all_args(i_arg)%name = TRIM(tmp_name)
-        ALLOCATE(CHARACTER(len=LEN(TRIM(tmp_val))) :: all_args(i_arg)%value)
+        ALLOCATE(CHARACTER(len=LEN_TRIM(tmp_val)) :: all_args(i_arg)%value)
         all_args(i_arg)%value = TRIM(tmp_val)
 
         i_arg = i_arg + 1
