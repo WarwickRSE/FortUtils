@@ -35,6 +35,8 @@
 ! Got first arg of    1.0000000000000001E+050  as a REAL
 ! Failed to get thrid arg as an INT
 
+! NOTE: while the command_line.f90 module DOES NOT use implicit
+! allocation, this sample program DOES
 
 PROGRAM MAIN
 
@@ -48,9 +50,12 @@ PROGRAM MAIN
   CHARACTER(LEN=25) :: str_val
   CHARACTER(LEN=:), ALLOCATABLE :: str_cont
   INTEGER(KIND=INT32) :: int_val
-  INTEGER :: total
+  INTEGER :: total, i
+
+  TYPE(str_wrapper), DIMENSION(:), ALLOCATABLE :: all_names
 
   ! Checking for presence and count
+  PRINT*, "Checking count and presence of specific name --------------------------------"
   success = arg_present("val1")
   total = arg_count()
   PRINT*, "There are ", total, "arguments"
@@ -60,6 +65,13 @@ PROGRAM MAIN
     PRINT*, "Arg val1 is not present"
   END IF
 
+  PRINT*, "A list of all the arguments supplied ---------------------------------------"
+  all_names = dump_names()
+  DO i = 1, SIZE(all_names)
+    PRINT*, all_names(i)%str
+  END DO
+
+  PRINT*, "Specific typed accesses -----------------------------------------------"
   ! Get just the stringy form: into a fixed size
   str_val = get_arg_value("val2")
   PRINT*, "Tried to get val2 as a string: ", str_val
@@ -67,7 +79,6 @@ PROGRAM MAIN
   ! Get the string, allowing implicit allocation to occur
   ! This line WILL SEGFAULT if compiled with -fno-realloc-lhs in GFortran etc
   str_cont = get_arg_value("val2")
-  PRINT*, ALLOCATED(str_cont)
   PRINT*, "Tried to get val2 as a string: ", str_cont, LEN(str_cont)
 
   ! Try to get arg named val1 as a REAL
