@@ -231,7 +231,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_num_logical
     INTEGER, INTENT(IN) :: num
-    LOGICAL, INTENT(OUT) :: val
+    LOGICAL, INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
@@ -266,7 +266,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_name_logical
     CHARACTER(LEN=*), INTENT(IN) :: name
-    LOGICAL, INTENT(OUT) :: val
+    LOGICAL, INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
@@ -309,7 +309,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_num_dbl
     INTEGER, INTENT(IN) :: num
-    REAL(KIND=REAL64), INTENT(OUT) :: val
+    REAL(KIND=REAL64), INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
@@ -342,7 +342,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_name_dbl
     CHARACTER(LEN=*), INTENT(IN) :: name
-    REAL(KIND=REAL64), INTENT(OUT) :: val
+    REAL(KIND=REAL64), INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
@@ -382,7 +382,7 @@ MODULE command_line
   FUNCTION get_arg_num_float(num, val, exists)
     LOGICAL :: get_arg_num_float
     INTEGER, INTENT(IN) :: num
-    REAL(KIND=REAL32), INTENT(OUT) :: val
+    REAL(KIND=REAL32), INTENT(INOUT) :: val
     REAL(KIND=REAL64) :: tmp
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
 
@@ -405,7 +405,7 @@ MODULE command_line
   FUNCTION get_arg_name_float(name, val, exists)
     LOGICAL :: get_arg_name_float
     CHARACTER(LEN=*), INTENT(IN) :: name
-    REAL(KIND=REAL32), INTENT(OUT) :: val
+    REAL(KIND=REAL32), INTENT(INOUT) :: val
     REAL(KIND=REAL64) :: tmp
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
 
@@ -430,7 +430,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_num_int
     INTEGER, INTENT(IN) :: num
-    INTEGER(KIND=INT32), INTENT(OUT) :: val
+    INTEGER(KIND=INT32), INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
@@ -464,7 +464,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_name_int
     CHARACTER(LEN=*), INTENT(IN) :: name
-    INTEGER(KIND=INT32), INTENT(OUT) :: val
+    INTEGER(KIND=INT32), INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
@@ -500,7 +500,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_num_long
     INTEGER, INTENT(IN) :: num
-    INTEGER(KIND=INT64), INTENT(OUT) :: val
+    INTEGER(KIND=INT64), INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
@@ -534,7 +534,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_name_long
     CHARACTER(LEN=*), INTENT(IN) :: name
-    INTEGER(KIND=INT64), INTENT(OUT) :: val
+    INTEGER(KIND=INT64), INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
@@ -571,7 +571,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_num_str
     INTEGER, INTENT(IN) :: num
-    CHARACTER(LEN=*), INTENT(OUT) :: val
+    CHARACTER(LEN=*), INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
 
@@ -607,7 +607,7 @@ MODULE command_line
 
     LOGICAL :: get_arg_name_str
     CHARACTER(LEN=*), INTENT(IN) :: name
-    CHARACTER(LEN=*), INTENT(OUT) :: val
+    CHARACTER(LEN=*), INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
