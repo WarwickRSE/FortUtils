@@ -26,6 +26,7 @@
   !> @author H Ratcliffe, Senior Research Software Engineer, University of Warwick
   !> @date 1/11/24
 
+
 MODULE command_line
 
   USE ISO_FORTRAN_ENV
@@ -62,12 +63,7 @@ MODULE command_line
   !> @param exists Whether the name was found
   !> @return True if the name is found and parsed, False otherwise
   INTERFACE get_arg
-    MODULE PROCEDURE get_arg_num_logical, get_arg_name_logical
-    MODULE PROCEDURE get_arg_num_int, get_arg_name_int
-    MODULE PROCEDURE get_arg_num_long, get_arg_name_long
-    MODULE PROCEDURE get_arg_num_float, get_arg_name_float
-    MODULE PROCEDURE get_arg_num_dbl, get_arg_name_dbl
-    MODULE PROCEDURE get_arg_num_str, get_arg_name_str
+    MODULE PROCEDURE get_arg_num, get_arg_name
   END INTERFACE
 
   !> The argument list
@@ -222,16 +218,16 @@ MODULE command_line
 
 !------------------------------------------------------------------
 
-  !> @brief Read by number for logical values
+  !> @brief Read by number
   !> @param num Argument number to read
   !> @param val Value to read into
   !> @param exists Whether the name was found
   !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_logical(num, val, exists)
+  FUNCTION get_arg_num(num, val, exists)
 
-    LOGICAL :: get_arg_num_logical
+    LOGICAL :: get_arg_num
     INTEGER, INTENT(IN) :: num
-    LOGICAL, INTENT(OUT) :: val
+    CLASS(*), INTENT(INOUT) :: val
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
     INTEGER :: ierr
@@ -239,10 +235,26 @@ MODULE command_line
     CALL initial_parse
 
     found = .FALSE.
+    ierr = 0
     ! Check requested number is in range
     IF(num <= num_args .AND. num > 0) THEN
       ! READ it from string into value
-      READ(all_args(num)%value, *, IOSTAT=ierr) val
+      SELECT TYPE(val)
+      TYPE IS (LOGICAL)
+        READ(all_args(num)%value, *, IOSTAT=ierr) val
+       TYPE IS (INTEGER)
+        READ(all_args(num)%value, *, IOSTAT=ierr) val
+       TYPE IS (INTEGER(KIND=INT64))
+        READ(all_args(num)%value, *, IOSTAT=ierr) val
+       TYPE IS (REAL)
+        READ(all_args(num)%value, *, IOSTAT=ierr) val
+       TYPE IS (REAL(KIND=REAL64))
+        READ(all_args(num)%value, *, IOSTAT=ierr) val
+       TYPE IS (CHARACTER(LEN=*))
+         val = all_args(num)%value
+       CLASS default
+        ierr = 1 ! Error for later
+      END SELECT
       found = .TRUE.
     END IF
 
@@ -251,22 +263,22 @@ MODULE command_line
     END IF
 
     ! Return value is whether value is found and correctly parsed
-    get_arg_num_logical = (found .AND. (ierr == 0))
+    get_arg_num = (found .AND. (ierr == 0))
 
-  END FUNCTION get_arg_num_logical
+  END FUNCTION get_arg_num
 
-  !> @brief Read by name for logical values
+  !> @brief Read by name
   !> NOTE : a flag (name with no '=value' part) will parse as
   !> .TRUE. if present, and .FALSE. if not
   !> @param name Argument name to look up
   !> @param val Value to read into
   !> @param exists Whether the name was found
   !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_logical(name, val, exists)
+  FUNCTION get_arg_name(name, val, exists)
 
-    LOGICAL :: get_arg_name_logical
+    LOGICAL :: get_arg_name
     CHARACTER(LEN=*), INTENT(IN) :: name
-    LOGICAL, INTENT(OUT) :: val
+    CLASS(*), INTENT(INOUT) :: val
     INTEGER :: i
     LOGICAL, INTENT(OUT), OPTIONAL :: exists
     LOGICAL :: found
@@ -275,53 +287,44 @@ MODULE command_line
     CALL initial_parse
 
     found = .FALSE.
-    val = .FALSE.
     ierr = 0
-    ! Our cmd_arg type is already initialised to the sentinel
     DO i = 1, num_args
       IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
         found = .TRUE.
         IF(all_args(i)%has_value) THEN
-          READ(all_args(i)%value, *, IOSTAT=ierr) val
+         SELECT TYPE(val)
+          TYPE IS (LOGICAL)
+           READ(all_args(i)%value, *, IOSTAT=ierr) val
+          TYPE IS (INTEGER)
+           READ(all_args(i)%value, *, IOSTAT=ierr) val
+          TYPE IS (INTEGER(KIND=INT64))
+           READ(all_args(i)%value, *, IOSTAT=ierr) val
+          TYPE IS (REAL)
+           READ(all_args(i)%value, *, IOSTAT=ierr) val
+          TYPE IS (REAL(KIND=REAL64))
+           READ(all_args(i)%value, *, IOSTAT=ierr) val
+          TYPE IS (CHARACTER(LEN=*))
+           val = all_args(i)%value
+          CLASS default
+           ierr = 1 ! Error for later
+         END SELECT
         ELSE
-          val = .TRUE.
+          SELECT TYPE(val)
+            TYPE IS (LOGICAL)
+             val = .TRUE. !Parsing as logical - present without value -> true
+            CLASS default
+             ierr = 1  !Error - fails to parse
+          END SELECT
         END IF
         EXIT
       END IF
     END DO
 
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_name_logical = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_name_logical
-
-
-  !> @brief Read by number for double precision values
-  !> @param num Argument number to read
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_dbl(num, val, exists)
-
-    LOGICAL :: get_arg_num_dbl
-    INTEGER, INTENT(IN) :: num
-    REAL(KIND=REAL64), INTENT(OUT) :: val
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Check requested number is in range
-    IF(num <= num_args .AND. num > 0) THEN
-      ! READ it from string into value
-      READ(all_args(num)%value, *, IOSTAT=ierr) val
-      found = .TRUE.
+    IF(.NOT. found) THEN
+     SELECT TYPE(val)
+      TYPE IS (LOGICAL)
+       val = .FALSE. ! Parsing as a logical and not being found -> false
+     END SELECT
     END IF
 
     IF(PRESENT(exists)) THEN
@@ -329,309 +332,9 @@ MODULE command_line
     END IF
 
     ! Return value is whether value is found and correctly parsed
-    get_arg_num_dbl = (found .AND. (ierr == 0))
+    get_arg_name = (found .AND. (ierr == 0))
 
-  END FUNCTION get_arg_num_dbl
-
-  !> @brief Read by name for double precision values
-  !> @param name Argument name to look up
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_dbl(name, val, exists)
-
-    LOGICAL :: get_arg_name_dbl
-    CHARACTER(LEN=*), INTENT(IN) :: name
-    REAL(KIND=REAL64), INTENT(OUT) :: val
-    INTEGER :: i
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Our cmd_arg type is already initialised to the sentinel
-    DO i = 1, num_args
-      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
-        found = .TRUE.
-        READ(all_args(i)%value, *, IOSTAT=ierr) val
-        EXIT
-      END IF
-    END DO
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_name_dbl = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_name_dbl
-
-  ! Command line parsing should be avoided in performance critical code
-  ! so extra overhead from double call and downcast is not a problem
-
-! \TODO Use this approach, or just dupe. all the code?
-
-  !> @brief Read by number for single precision (float) values
-  !> @param num Argument number to read
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_float(num, val, exists)
-    LOGICAL :: get_arg_num_float
-    INTEGER, INTENT(IN) :: num
-    REAL(KIND=REAL32), INTENT(OUT) :: val
-    REAL(KIND=REAL64) :: tmp
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-
-    get_arg_num_float = get_arg_num_dbl(num, tmp, exists)
-    IF( ABS(tmp) < HUGE(val)) THEN
-      !Value in range. Convert. Note: there may be precision loss
-      val = REAL(tmp, KIND=REAL32)
-    ELSE
-      !Value out of range, can't be parsed
-      get_arg_num_float  = .FALSE.
-    END IF
-
-  END FUNCTION
-
-  !> @brief Read by name for single precision (float) values
-  !> @param name Argument name to look up
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_float(name, val, exists)
-    LOGICAL :: get_arg_name_float
-    CHARACTER(LEN=*), INTENT(IN) :: name
-    REAL(KIND=REAL32), INTENT(OUT) :: val
-    REAL(KIND=REAL64) :: tmp
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-
-    get_arg_name_float = get_arg_name_dbl(name, tmp, exists)
-    IF( ABS(tmp) < HUGE(val)) THEN
-      !Value in range. Convert. Note: there may be precision loss
-      val = REAL(tmp, KIND=REAL32)
-    ELSE
-      !Value out of range, can't be parsed
-      get_arg_name_float  = .FALSE.
-    END IF
-
-  END FUNCTION
-
-
-  !> @brief Read by number for integer values
-  !> @param num Argument number to read
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_int(num, val, exists)
-
-    LOGICAL :: get_arg_num_int
-    INTEGER, INTENT(IN) :: num
-    INTEGER(KIND=INT32), INTENT(OUT) :: val
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Check requested number is in range
-    IF(num <= num_args .AND. num > 0) THEN
-      ! READ it from string into value
-      ! We don't need to specify the format in general
-      READ(all_args(num)%value, *, IOSTAT=ierr) val
-      found = .TRUE.
-    END IF
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_num_int = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_num_int
-
-  !> @brief Read by name for integer values
-  !> @param name Argument name to look up
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_int(name, val, exists)
-
-    LOGICAL :: get_arg_name_int
-    CHARACTER(LEN=*), INTENT(IN) :: name
-    INTEGER(KIND=INT32), INTENT(OUT) :: val
-    INTEGER :: i
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Our cmd_arg type is already initialised to the sentinel
-    DO i = 1, num_args
-      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
-        found = .TRUE.
-        READ(all_args(i)%value, *, IOSTAT=ierr) val
-        EXIT
-      END IF
-    END DO
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_name_int = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_name_int
-
-  !> @brief Read by number for long integer values
-  !> @param num Argument number to read
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_long(num, val, exists)
-
-    LOGICAL :: get_arg_num_long
-    INTEGER, INTENT(IN) :: num
-    INTEGER(KIND=INT64), INTENT(OUT) :: val
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Check requested number is in range
-    IF(num <= num_args .AND. num > 0) THEN
-      ! READ it from string into value
-      ! We don't need to specify the format in general
-      READ(all_args(num)%value, *, IOSTAT=ierr) val
-      found = .TRUE.
-    END IF
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_num_long = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_num_long
-
-  !> @brief Read by name for long integer values
-  !> @param name Argument name to look up
-  !> @param val Value to read into
-  !> @param exists Whether the name was found
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_long(name, val, exists)
-
-    LOGICAL :: get_arg_name_long
-    CHARACTER(LEN=*), INTENT(IN) :: name
-    INTEGER(KIND=INT64), INTENT(OUT) :: val
-    INTEGER :: i
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-    INTEGER :: ierr
-
-   CALL initial_parse
-
-    found = .FALSE.
-    ! Our cmd_arg type is already initialised to the sentinel
-    DO i = 1, num_args
-      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
-        found = .TRUE.
-        READ(all_args(i)%value, *, IOSTAT=ierr) val
-        EXIT
-      END IF
-    END DO
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_name_long = (found .AND. (ierr == 0))
-
-  END FUNCTION get_arg_name_long
-
-  !> @brief Read by number for string/character values
-  !> @param num Argument number to read
-  !> @param val Value to read into
-  !> @param exists Whether the name was found - this is already contained in
-  !> the return value, but is given for consistency with the other members
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_num_str(num, val, exists)
-
-    LOGICAL :: get_arg_num_str
-    INTEGER, INTENT(IN) :: num
-    CHARACTER(LEN=*), INTENT(OUT) :: val
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-
-    CALL initial_parse
-
-    found = .FALSE.
-    ! Check requested number is in range
-    IF(num <= num_args .AND. num > 0) THEN
-      ! READ it from string into value
-      ! We don't need to specify the format in general
-      val = all_args(num)%value
-      found = .TRUE.
-    END IF
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_num_str = found
-
-  END FUNCTION get_arg_num_str
-
-  !> @brief Read by name for string values
-  !> NOTE: if the string passed is shorter than the value, it will be truncated
-  !> If the length is not known use get_arg_value to get an allocatable string
-  !> @param name Argument name to look up
-  !> @param val Value to read into
-  !> @param exists Whether the name was found - this is already contained in
-  !> the return value, but is given for consistency with the other members
-  !> @return True if the name is found and parsed, False otherwise
-  FUNCTION get_arg_name_str(name, val, exists)
-
-    LOGICAL :: get_arg_name_str
-    CHARACTER(LEN=*), INTENT(IN) :: name
-    CHARACTER(LEN=*), INTENT(OUT) :: val
-    INTEGER :: i
-    LOGICAL, INTENT(OUT), OPTIONAL :: exists
-    LOGICAL :: found
-
-    CALL initial_parse
-
-    found = .FALSE.
-    DO i = 1, num_args
-      IF(all_args(i)%name == TRIM(ADJUSTL(name))) THEN
-        found = .TRUE.
-        val = all_args(i)%value
-        EXIT
-      END IF
-    END DO
-
-    IF(PRESENT(exists)) THEN
-      exists = found
-    END IF
-
-    ! Return value is whether value is found and correctly parsed
-    get_arg_name_str = found
-
-  END FUNCTION get_arg_name_str
-
+  END FUNCTION get_arg_name
 
 !--------------------------------------------------------------------
   !> @brief Check presence of an argument by name
